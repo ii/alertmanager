@@ -221,7 +221,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	waitFunc := meshWait(mrouter, 5*time.Second)
+	waitFunc := func() time.Duration { return 0 }
+	if *meshListen != "" {
+		waitFunc = meshWait(mrouter, 5*time.Second)
+	}
 	timeoutFunc := func(d time.Duration) time.Duration {
 		if d < notify.MinTimeout {
 			d = notify.MinTimeout
@@ -346,6 +349,8 @@ func (s peerDescSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func meshWait(r *mesh.Router, timeout time.Duration) func() time.Duration {
 	return func() time.Duration {
 		var peers peerDescSlice
+		fmt.Println("MESHROUTER", r)
+		fmt.Println("Peers", r.Peers)
 		for _, desc := range r.Peers.Descriptions() {
 			peers = append(peers, desc)
 		}
