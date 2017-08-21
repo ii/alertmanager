@@ -9,3 +9,4 @@ go_import_path: github.com/prometheus/node_exporter
 
 script:
 - make
+- GOARCH=386 make
