@@ -236,7 +236,7 @@ func createStage(rc *config.Receiver, tmpl *template.Template, wait func() time.
 		}
 		var s MultiStage
 		s = append(s, NewWaitStage(wait))
-		s = append(s, NewDedupStage(notificationLog, recv, i.conf.SendResolved()))
+		s = append(s, NewDedupStage(notificationLog, recv))
 		s = append(s, NewRetryStage(i))
 		s = append(s, NewSetNotifiesStage(notificationLog, recv))
 
@@ -411,22 +411,20 @@ func (ws *WaitStage) Exec(ctx context.Context, l log.Logger, alerts ...*types.Al
 // DedupStage filters alerts.
 // Filtering happens based on a notification log.
 type DedupStage struct {
-	nflog        nflog.Log
-	recv         *nflogpb.Receiver
-	sendResolved bool
+	nflog nflog.Log
+	recv  *nflogpb.Receiver
 
 	now  func() time.Time
 	hash func(*types.Alert) uint64
 }
 
 // NewDedupStage wraps a DedupStage that runs against the given notification log.
-func NewDedupStage(l nflog.Log, recv *nflogpb.Receiver, sendResolved bool) *DedupStage {
+func NewDedupStage(l nflog.Log, recv *nflogpb.Receiver) *DedupStage {
 	return &DedupStage{
-		nflog:        l,
-		recv:         recv,
-		now:          utcNow,
-		sendResolved: sendResolved,
-		hash:         hashAlert,
+		nflog: l,
+		recv:  recv,
+		now:   utcNow,
+		hash:  hashAlert,
 	}
 }
 
@@ -494,7 +492,7 @@ func (n *DedupStage) needsUpdate(entry *nflogpb.Entry, firing, resolved map[uint
 		return true, nil
 	}
 
-	if n.sendResolved && !entry.IsResolvedSubset(resolved) {
+	if !entry.IsResolvedSubset(resolved) {
 		return true, nil
 	}
 

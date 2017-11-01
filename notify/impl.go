@@ -73,6 +73,13 @@ func (i *Integration) Notify(ctx context.Context, alerts ...*types.Alert) (bool,
 	if i.conf.SendResolved() {
 		res = alerts
 	} else {
+		fa, ok := FiringAlerts(ctx)
+		if !ok {
+			return false, fmt.Errorf("firing alerts missing")
+		}
+		if len(fa) == 0 {
+			return false, nil
+		}
 		for _, a := range alerts {
 			if a.Status() != model.AlertResolved {
 				res = append(res, a)
