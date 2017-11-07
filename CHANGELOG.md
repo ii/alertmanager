@@ -1,3 +1,9 @@
+## v0.15.1 / 2017-11-07
+
+* [BUGFIX] netstat: return nothing when /proc/net/snmp6 not found #718
+* [BUGFIX] Fix off by one in Linux interrupts collector #721
+* [BUGFIX] Add and use sysReadFile in hwmon collector #728
+
 ## v0.15.0 / 2017-10-06
 
 **Breaking changes**
