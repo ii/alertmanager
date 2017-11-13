@@ -9,7 +9,7 @@ before_script:
 
 compile:
   image: golang:1.8.1
-  stage: build
+  stage: Build
   script:
     - ls -lah
     - ln -s /builds /go/src/github.com
@@ -21,7 +21,7 @@ compile:
     expire_in: 4 weeks
 
 container:
-  stage: package
+  stage: Package
   image: docker:17.05.0
   script:
     - IMAGE_TAG=${CI_COMMIT_REF_NAME}.${CI_COMMIT_SHA_SHORT}.${CI_JOB_ID}
