@@ -58,8 +58,21 @@ container:
         # PROJECT_PIPELINE=$(curl -X POST -F token=$CI_JOB_TOKEN -F ref=stable-v0.2.0-integrations https://gitlab.cncf.ci/api/v4/projects/2/trigger/pipeline | jq '.id')
 
         echo 'Wait for Cluster "FIX ME / HACK"'
-        until [ "$JOB_STATUS" == '"success"' ]; do JOB_STATUS="$(curl -s --header "PRIVATE-TOKEN:${TOKEN}" "https://gitlab.cncf.ci/api/v4/projects/2/pipelines/${PROJECT_PIPELINE}/jobs?scope=success" | jq '.[] | select(.name=="Kubernetes-Deploy") | .status')" ; sleep 0.5 ; done ; echo 'Cluster Ready'
+        until [ "$JOB_STATUS" == '"success"' ]; do
+            JOB_STATUS="$(curl -s --header "PRIVATE-TOKEN:${TOKEN}" "https://gitlab.cncf.ci/api/v4/projects/2/pipelines/${PROJECT_PIPELINE}/jobs?scope=success" | jq '.[] | select(.name=="Kubernetes-Deploy") | .status')" 
+            sleep 0.5
+            if [ $"JOB_STATUS" == '"failed"' ]; then
+                exit 1
+            elif [ $"JOB_STATUS" == '"canceled"' ]; then
+                exit 1
+            else
+                continue
+            fi
+        done
+        echo 'Cluster Ready'
+
         PROJECT_JOB=$(curl --header "PRIVATE-TOKEN:${TOKEN}" "https://gitlab.cncf.ci/api/v4/projects/2/pipelines/${PROJECT_PIPELINE}/jobs?scope=success" | jq '.[] | select(.name=="Kubernetes-Deploy") | .id')
+        
         export BASE_URL=${BASE_URL:-$(echo $CI_PROJECT_URL |  cut -d'/' -f1-3)}
         curl -s -o kubeconfig -L "$BASE_URL/cncf/cross-cloud/-/jobs/${PROJECT_JOB}/artifacts/raw/data/$CLOUD-stable-v0-2-0-integrations/kubeconfig"
         cat ./kubeconfig | base64 | tee ./kubeconfig
@@ -93,7 +106,19 @@ container:
         # PROJECT_PIPELINE=$(curl -X POST -F token=$CI_JOB_TOKEN -F ref=master https://gitlab.cncf.ci/api/v4/projects/45/trigger/pipeline | jq '.id')
 
         echo 'Verify Project Deployment'
-        until [ "$JOB_STATUS" == '"success"' ]; do JOB_STATUS="$(curl -s --header "PRIVATE-TOKEN:${TOKEN}" "https://gitlab.cncf.ci/api/v4/projects/45/pipelines/${PROJECT_PIPELINE}/jobs?scope=success" | jq '.[] | select(.name=="Cross-Project") | .status')" ; sleep 0.5 ; done ; echo 'Cluster Ready'
+        
+        until [ "$JOB_STATUS" == '"success"' ]; do
+            JOB_STATUS="$(curl -s --header "PRIVATE-TOKEN:${TOKEN}" "https://gitlab.cncf.ci/api/v4/projects/45/pipelines/${PROJECT_PIPELINE}/jobs?scope=success" | jq '.[] | select(.name=="Cross-Project") | .status')"  
+            sleep 0.5
+            if [ $"JOB_STATUS" == '"failed"' ]; then
+                exit 1
+            elif [ $"JOB_STATUS" == '"canceled"' ]; then
+                exit 1
+            else
+                continue
+            fi
+        done
+        echo 'Cluster Ready'
 
       fi
   artifacts:
