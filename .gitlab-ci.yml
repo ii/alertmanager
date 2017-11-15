@@ -110,9 +110,9 @@ container:
         until [ "$JOB_STATUS" == '"success"' ]; do
             JOB_STATUS="$(curl -s --header "PRIVATE-TOKEN:${TOKEN}" "https://gitlab.cncf.ci/api/v4/projects/45/pipelines/${PROJECT_PIPELINE}/jobs?scope=success" | jq '.[] | select(.name=="Cross-Project") | .status')"
             sleep 0.5
-            if [ $"PROJECT_COMPILE_JOB" == '"failed"' ]; then
+            if [ $"JOB_STATUS" == '"failed"' ]; then
                 exit 1
-            elif [ $"PROJECT_COMPILE_JOB" == '"canceled"' ]; then
+            elif [ $"JOB_STATUS" == '"canceled"' ]; then
                 exit 1
             else
                continue
