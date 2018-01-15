@@ -57,7 +57,7 @@ func NewDiskstatsCollector() (Collector, error) {
 		descs: []typedDesc{
 			{
 				desc: prometheus.NewDesc(
-					prometheus.BuildFQName(namespace, diskSubsystem, "reads_completed"),
+					prometheus.BuildFQName(namespace, diskSubsystem, "reads_completed_total"),
 					"The total number of reads completed successfully.",
 					diskLabelNames,
 					nil,
@@ -65,7 +65,7 @@ func NewDiskstatsCollector() (Collector, error) {
 			},
 			{
 				desc: prometheus.NewDesc(
-					prometheus.BuildFQName(namespace, diskSubsystem, "reads_merged"),
+					prometheus.BuildFQName(namespace, diskSubsystem, "reads_merged_total"),
 					"The total number of reads merged. See https://www.kernel.org/doc/Documentation/iostats.txt.",
 					diskLabelNames,
 					nil,
@@ -73,7 +73,7 @@ func NewDiskstatsCollector() (Collector, error) {
 			},
 			{
 				desc: prometheus.NewDesc(
-					prometheus.BuildFQName(namespace, diskSubsystem, "sectors_read"),
+					prometheus.BuildFQName(namespace, diskSubsystem, "read_sectors_total"),
 					"The total number of sectors read successfully.",
 					diskLabelNames,
 					nil,
@@ -81,7 +81,7 @@ func NewDiskstatsCollector() (Collector, error) {
 			},
 			{
 				desc: prometheus.NewDesc(
-					prometheus.BuildFQName(namespace, diskSubsystem, "read_time_ms"),
+					prometheus.BuildFQName(namespace, diskSubsystem, "read_time_seconds_total"),
 					"The total number of milliseconds spent by all reads.",
 					diskLabelNames,
 					nil,
@@ -89,7 +89,7 @@ func NewDiskstatsCollector() (Collector, error) {
 			},
 			{
 				desc: prometheus.NewDesc(
-					prometheus.BuildFQName(namespace, diskSubsystem, "writes_completed"),
+					prometheus.BuildFQName(namespace, diskSubsystem, "writes_completed_total"),
 					"The total number of writes completed successfully.",
 					diskLabelNames,
 					nil,
@@ -97,7 +97,7 @@ func NewDiskstatsCollector() (Collector, error) {
 			},
 			{
 				desc: prometheus.NewDesc(
-					prometheus.BuildFQName(namespace, diskSubsystem, "writes_merged"),
+					prometheus.BuildFQName(namespace, diskSubsystem, "writes_merged_total"),
 					"The number of writes merged. See https://www.kernel.org/doc/Documentation/iostats.txt.",
 					diskLabelNames,
 					nil,
@@ -105,7 +105,7 @@ func NewDiskstatsCollector() (Collector, error) {
 			},
 			{
 				desc: prometheus.NewDesc(
-					prometheus.BuildFQName(namespace, diskSubsystem, "sectors_written"),
+					prometheus.BuildFQName(namespace, diskSubsystem, "written_sectors_total"),
 					"The total number of sectors written successfully.",
 					diskLabelNames,
 					nil,
@@ -113,8 +113,8 @@ func NewDiskstatsCollector() (Collector, error) {
 			},
 			{
 				desc: prometheus.NewDesc(
-					prometheus.BuildFQName(namespace, diskSubsystem, "write_time_ms"),
-					"This is the total number of milliseconds spent by all writes.",
+					prometheus.BuildFQName(namespace, diskSubsystem, "write_time_seconds_total"),
+					"This is the total number of seconds spent by all writes.",
 					diskLabelNames,
 					nil,
 				), valueType: prometheus.CounterValue,
@@ -129,23 +129,23 @@ func NewDiskstatsCollector() (Collector, error) {
 			},
 			{
 				desc: prometheus.NewDesc(
-					prometheus.BuildFQName(namespace, diskSubsystem, "io_time_ms"),
-					"Total Milliseconds spent doing I/Os.",
+					prometheus.BuildFQName(namespace, diskSubsystem, "io_time_seconds_total"),
+					"Total seconds spent doing I/Os.",
 					diskLabelNames,
 					nil,
 				), valueType: prometheus.CounterValue,
 			},
 			{
 				desc: prometheus.NewDesc(
-					prometheus.BuildFQName(namespace, diskSubsystem, "io_time_weighted"),
-					"The weighted # of milliseconds spent doing I/Os. See https://www.kernel.org/doc/Documentation/iostats.txt.",
+					prometheus.BuildFQName(namespace, diskSubsystem, "io_time_weighted_seconds_total"),
+					"The weighted # of seconds spent doing I/Os. See https://www.kernel.org/doc/Documentation/iostats.txt.",
 					diskLabelNames,
 					nil,
 				), valueType: prometheus.CounterValue,
 			},
 			{
 				desc: prometheus.NewDesc(
-					prometheus.BuildFQName(namespace, diskSubsystem, "bytes_read"),
+					prometheus.BuildFQName(namespace, diskSubsystem, "read_bytes_total"),
 					"The total number of bytes read successfully.",
 					diskLabelNames,
 					nil,
@@ -153,7 +153,7 @@ func NewDiskstatsCollector() (Collector, error) {
 			},
 			{
 				desc: prometheus.NewDesc(
-					prometheus.BuildFQName(namespace, diskSubsystem, "bytes_written"),
+					prometheus.BuildFQName(namespace, diskSubsystem, "written_bytes_total"),
 					"The total number of bytes written successfully.",
 					diskLabelNames,
 					nil,
@@ -184,6 +184,11 @@ func (c *diskstatsCollector) Update(ch chan<- prometheus.Metric) error {
 			v, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				return fmt.Errorf("invalid value %s in diskstats: %s", value, err)
+			}
+			// Convert to seconds
+			switch i {
+			case 3, 7, 9, 10:
+				v = v / 1000.0
 			}
 			ch <- c.descs[i].mustNewConstMetric(v, dev)
 		}
