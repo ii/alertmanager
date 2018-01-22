@@ -80,7 +80,14 @@ tcpstat | Exposes TCP connection status information from `/proc/net/tcp` and `/p
 Name     | Description | OS
 ---------|-------------|----
 gmond | Exposes statistics from Ganglia. | _any_
-megacli | Exposes RAID statistics from MegaCLI. | Linux
+
+### Removed
+
+*These collectors are obsolete and have been removed.*
+
+| Name      | Description                           | Replacment
+| --------- | ------------------------------------- | -----------
+| megacli   | Exposes RAID statistics from MegaCLI. | [Textfile script](text_collector_examples/storcli.py)
 
 ### Textfile Collector
 
