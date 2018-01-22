@@ -16,6 +16,7 @@ GOPATH := $(firstword $(subst :, ,$(shell $(GO) env GOPATH)))
 GOARCH := $(shell $(GO) env GOARCH)
 GOHOSTARCH := $(shell $(GO) env GOHOSTARCH)
 
+PROMTOOL    ?= $(GOPATH)/bin/promtool
 PROMU       ?= $(GOPATH)/bin/promu
 STATICCHECK ?= $(GOPATH)/bin/staticcheck
 pkgs         = $(shell $(GO) list ./... | grep -v /vendor/)
@@ -86,7 +87,7 @@ collector/fixtures/sys/.unpacked: collector/fixtures/sys.ttar
 	./ttar -C collector/fixtures -x -f collector/fixtures/sys.ttar
 	touch $@
 
-test-e2e: build collector/fixtures/sys/.unpacked
+test-e2e: build collector/fixtures/sys/.unpacked $(PROMTOOL)
 	@echo ">> running end-to-end tests"
 	./end-to-end-test.sh
 
@@ -124,6 +125,9 @@ test-docker:
 	@echo ">> testing docker image"
 	./test_image.sh "$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)" 9100
 
+$(GOPATH)/bin/promtool promtool:
+	@GOOS= GOARCH= $(GO) get -u github.com/prometheus/prometheus/cmd/promtool
+
 $(GOPATH)/bin/promu promu:
 	@GOOS= GOARCH= $(GO) get -u github.com/prometheus/promu
 
@@ -131,10 +135,10 @@ $(GOPATH)/bin/staticcheck:
 	@GOOS= GOARCH= $(GO) get -u honnef.co/go/tools/cmd/staticcheck
 
 
-.PHONY: all style format build test test-e2e vet tarball docker promu staticcheck
+.PHONY: all style format build test test-e2e vet tarball docker promtool promu staticcheck
 
 # Declaring the binaries at their default locations as PHONY targets is a hack
 # to ensure the latest version is downloaded on every make execution.
 # If this is not desired, copy/symlink these binaries to a different path and
 # set the respective environment variables.
-.PHONY: $(GOPATH)/bin/promu $(GOPATH)/bin/staticcheck
+.PHONY: $(GOPATH)/bin/promtool $(GOPATH)/bin/promu $(GOPATH)/bin/staticcheck

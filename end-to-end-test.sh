@@ -128,8 +128,6 @@ EOF
   fi
 }
 
-trap finish EXIT
-
 get() {
   if command -v curl > /dev/null 2>&1
   then
@@ -146,6 +144,26 @@ get() {
 sleep 1
 
 get "127.0.0.1:${port}/metrics" | grep -E -v "${skip_re}" > "${tmpdir}/e2e-output.txt"
+
+# Temporarily allow pipe failure so we can capture and filter the output
+# of promtool check metrics.
+set +o pipefail
+
+# Only lint metrics that are exported by the node_exporter.  The Prometheus Go
+# client currently exports a metric with a "microseconds" unit.  Remove this
+# filter once that has been updated.
+lint=$(promtool check metrics < "${tmpdir}/e2e-output.txt" 2>&1 | grep "node_")
+if [[ ! -z $lint ]]; then
+  echo -e "Some metrics do not follow Prometheus best practices:\n"
+  echo "$lint"
+
+  exit 1
+fi
+
+set -o pipefail
+
+# Only show exporter logs if needed, after outputting the diff.
+trap finish EXIT
 
 diff -u \
   "${fixture}" \
