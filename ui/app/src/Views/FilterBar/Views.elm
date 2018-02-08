@@ -1,7 +1,7 @@
 module Views.FilterBar.Views exposing (view)
 
 import Html exposing (Html, Attribute, div, span, input, text, button, i, small)
-import Html.Attributes exposing (defaultValue, class, style, disabled, id)
+import Html.Attributes exposing (value, class, style, disabled, id)
 import Html.Events exposing (onClick, onInput, on, keyCode)
 import Utils.Filter exposing (Matcher)
 import Utils.List
@@ -110,7 +110,7 @@ view { matchers, matcherText, backspacePressed } =
                             [ input
                                 [ id "filter-bar-matcher"
                                 , class "form-control"
-                                , defaultValue matcherText
+                                , value matcherText
                                 , onKeyDown keyDown
                                 , onKeyUp keyUp
                                 , onInput UpdateMatcherText
