@@ -89,7 +89,7 @@ func main() {
 	}
 
 	// TODO(ts): Remove deprecated and problematic InstrumentHandlerFunc usage.
-	http.HandleFunc(*metricsPath, prometheus.InstrumentHandlerFunc("prometheus", handler))
+	http.Handle(*metricsPath, promhttp.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<html>
 			<head><title>Node Exporter</title></head>

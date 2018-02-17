@@ -104,6 +104,7 @@ func NewNodeCollector(filters ...string) (*nodeCollector, error) {
 			}
 		}
 	}
+	prometheus.MustRegister(nodeCollector{Collectors: collectors})
 	return &nodeCollector{Collectors: collectors}, nil
 }
 
