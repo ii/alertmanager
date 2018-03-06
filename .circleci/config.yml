@@ -3,8 +3,7 @@ version: 2
 
 jobs:
   build:
-    docker:
-    - image: circleci/golang:1.10
+    machine: true
 
     working_directory: /go/src/github.com/prometheus/node_exporter
 
@@ -17,6 +16,7 @@ jobs:
     steps:
     - checkout
     - setup_remote_docker
+    - run: circleci-install golang 1.10.0
     - run: make promu
     - run: make
     - run: rm -v node_exporter
