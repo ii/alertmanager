@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin"
-	"github.com/prometheus/alertmanager/cli/format"
 	"github.com/prometheus/alertmanager/types"
 	"github.com/prometheus/common/model"
 )
@@ -43,29 +42,21 @@ func update(element *kingpin.ParseElement, ctx *kingpin.ParseContext) error {
 	}
 
 	alertmanagerUrl := GetAlertmanagerURL("/api/v1/silence")
-	var updatedSilences []types.Silence
+	updatedSilenceIDs := make([]string, 0, len(*updateIds))
 	for _, silenceId := range *updateIds {
 		silence, err := getSilenceById(silenceId, alertmanagerUrl)
 		if err != nil {
 			return err
 		}
-		silence, err = updateSilence(silence)
+		newSilenceID, err := updateSilence(silence)
 		if err != nil {
 			return err
 		}
-		updatedSilences = append(updatedSilences, *silence)
+		updatedSilenceIDs = append(updatedSilenceIDs, newSilenceID)
 	}
 
-	if *silenceQuiet {
-		for _, silence := range updatedSilences {
-			fmt.Println(silence.ID)
-		}
-	} else {
-		formatter, found := format.Formatters[*output]
-		if !found {
-			return fmt.Errorf("unknown output formatter")
-		}
-		formatter.FormatSilences(updatedSilences)
+	for _, id := range updatedSilenceIDs {
+		fmt.Println(id)
 	}
 	return nil
 }
@@ -99,20 +90,20 @@ func getSilenceById(silenceId string, baseUrl url.URL) (*types.Silence, error) {
 	return &response.Data, nil
 }
 
-func updateSilence(silence *types.Silence) (*types.Silence, error) {
+func updateSilence(silence *types.Silence) (string, error) {
 	var err error
 	if *updateEnd != "" {
 		silence.EndsAt, err = time.Parse(time.RFC3339, *updateEnd)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 	} else if *updateDuration != "" {
 		d, err := model.ParseDuration(*updateDuration)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		if d == 0 {
-			return nil, fmt.Errorf("silence duration must be greater than 0")
+			return "", fmt.Errorf("silence duration must be greater than 0")
 		}
 		silence.EndsAt = silence.EndsAt.UTC().Add(time.Duration(d))
 	}
@@ -120,12 +111,12 @@ func updateSilence(silence *types.Silence) (*types.Silence, error) {
 	if *updateStart != "" {
 		silence.StartsAt, err = time.Parse(time.RFC3339, *updateStart)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 	}
 
 	if silence.StartsAt.After(silence.EndsAt) {
-		return nil, errors.New("silence cannot start after it ends")
+		return "", errors.New("silence cannot start after it ends")
 	}
 
 	if *updateComment != "" {
@@ -133,9 +124,9 @@ func updateSilence(silence *types.Silence) (*types.Silence, error) {
 	}
 
 	// addSilence can also be used to update an existing silence
-	_, err = addSilence(silence)
+	newSilenceID, err := addSilence(silence)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return silence, nil
+	return newSilenceID, nil
 }
