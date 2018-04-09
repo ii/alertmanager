@@ -13,6 +13,16 @@ jobs:
     - run: make
     - run: rm -v node_exporter
 
+  codespell:
+    docker:
+    - image: circleci/python
+    working_directory: /go/src/github.com/prometheus/node_exporter
+
+    steps:
+    - checkout
+    - run: pip install codespell
+    - run: codespell --skip="./vendor"
+
   build:
     machine: true
     working_directory: /home/circleci/.go_workspace/src/github.com/prometheus/node_exporter
@@ -131,6 +141,10 @@ workflows:
           tags:
             only: /.*/
     - build:
+        filters:
+          tags:
+            only: /.*/
+    - codespell:
         filters:
           tags:
             only: /.*/
