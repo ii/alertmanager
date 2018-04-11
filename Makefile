@@ -91,6 +91,7 @@ skip-test-32bit:
 
 collector/fixtures/sys/.unpacked: collector/fixtures/sys.ttar
 	@echo ">> extracting sysfs fixtures"
+	rm -r collector/fixtures/sys
 	./ttar -C collector/fixtures -x -f collector/fixtures/sys.ttar
 	touch $@
 
