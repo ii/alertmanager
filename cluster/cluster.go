@@ -233,7 +233,7 @@ func (p *Peer) setInitialFailed(peers []string) {
 		}
 
 		pr := peer{
-			status:    StatusNone,
+			status:    StatusFailed,
 			leaveTime: now,
 			Node: &memberlist.Node{
 				Addr: net.ParseIP(ip),
@@ -381,7 +381,7 @@ func (p *Peer) peerJoin(n *memberlist.Node) {
 
 	if oldStatus == StatusFailed {
 		level.Debug(p.logger).Log("msg", "peer rejoined", "peer", pr.Node)
-		p.failedPeers = removeOldPeer(p.failedPeers, pr.Name)
+		p.failedPeers = removeOldPeer(p.failedPeers, pr.Address())
 	}
 }
 
@@ -698,10 +698,10 @@ func retry(interval time.Duration, stopc <-chan struct{}, f func() error) error 
 	}
 }
 
-func removeOldPeer(old []peer, name string) []peer {
+func removeOldPeer(old []peer, addr string) []peer {
 	new := make([]peer, 0, len(old))
 	for _, p := range old {
-		if p.Name != name {
+		if p.Address() != addr {
 			new = append(new, p)
 		}
 	}
