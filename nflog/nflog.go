@@ -30,6 +30,8 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/matttproud/golang_protobuf_extensions/pbutil"
+	"github.com/prometheus/alertmanager/cluster"
+	"github.com/prometheus/alertmanager/hash"
 	pb "github.com/prometheus/alertmanager/nflog/nflogpb"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -97,6 +99,8 @@ type metrics struct {
 	queryErrorsTotal        prometheus.Counter
 	queryDuration           prometheus.Histogram
 	propagatedMessagesTotal prometheus.Counter
+	compressedMessagesTotal prometheus.Counter
+	skippedMessagesTotal    prometheus.Counter
 }
 
 func newMetrics(r prometheus.Registerer) *metrics {
@@ -130,6 +134,14 @@ func newMetrics(r prometheus.Registerer) *metrics {
 		Name: "alertmanager_nflog_gossip_messages_propagated_total",
 		Help: "Number of received gossip messages that have been further gossiped.",
 	})
+	m.compressedMessagesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "alertmanager_nflog_gossip_messages_compressed_total",
+		Help: "Number of received gossip messages that have had their firing and resolved alerts reduced to a single hash.",
+	})
+	m.skippedMessagesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "alertmanager_nflog_gossip_messages_skipped_total",
+		Help: "Number of received gossip messages that were not gossiped due to size.",
+	})
 
 	if r != nil {
 		r.MustRegister(
@@ -140,6 +152,8 @@ func newMetrics(r prometheus.Registerer) *metrics {
 			m.queryErrorsTotal,
 			m.queryDuration,
 			m.propagatedMessagesTotal,
+			m.compressedMessagesTotal,
+			m.skippedMessagesTotal,
 		)
 	}
 	return m
@@ -402,6 +416,7 @@ func (l *Log) Log(r *pb.Receiver, gkey string, firingAlerts, resolvedAlerts []ui
 			Timestamp:      now,
 			FiringAlerts:   firingAlerts,
 			ResolvedAlerts: resolvedAlerts,
+			Format:         pb.Entry_STANDARD,
 		},
 		ExpiresAt: now.Add(l.retention),
 	}
@@ -410,6 +425,30 @@ func (l *Log) Log(r *pb.Receiver, gkey string, firingAlerts, resolvedAlerts []ui
 	if err != nil {
 		return err
 	}
+
+	if len(b) > cluster.MaxClusterMessageSize {
+		// Add metric for oversized message so users can try to shrink them.
+		level.Error(l.logger).Log("msg", "cluster message exceeds max size", "max", cluster.MaxClusterMessageSize, "size", len(b))
+		e.Entry.Format = pb.Entry_COMPRESSED
+		if len(e.Entry.FiringAlerts) > 0 {
+			e.Entry.FiringAlerts = []uint64{hash.Uint64(e.Entry.FiringAlerts)}
+		}
+		if len(e.Entry.ResolvedAlerts) > 0 {
+			e.Entry.ResolvedAlerts = []uint64{hash.Uint64(e.Entry.ResolvedAlerts)}
+		}
+
+		b, err = marshalMeshEntry(e)
+		if err != nil {
+			return err
+		}
+		if len(b) > cluster.MaxClusterMessageSize {
+			l.metrics.skippedMessagesTotal.Inc()
+			level.Error(l.logger).Log("msg", "compressed cluster message exceeds max size", "max", cluster.MaxClusterMessageSize, "size", len(b))
+			return fmt.Errorf("notification log too big: %d > %d", len(b), cluster.MaxClusterMessageSize)
+		}
+		l.metrics.compressedMessagesTotal.Inc()
+	}
+
 	l.st.merge(e)
 	l.broadcast(b)
 

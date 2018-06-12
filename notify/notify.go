@@ -29,6 +29,7 @@ import (
 
 	"github.com/prometheus/alertmanager/cluster"
 	"github.com/prometheus/alertmanager/config"
+	"github.com/prometheus/alertmanager/hash"
 	"github.com/prometheus/alertmanager/nflog"
 	"github.com/prometheus/alertmanager/nflog/nflogpb"
 	"github.com/prometheus/alertmanager/silence"
@@ -493,7 +494,7 @@ func putHashBuffer(b []byte) {
 }
 
 func hashAlert(a *types.Alert) uint64 {
-	const sep = '\xff'
+	const sep = '\x00'
 
 	b := getHashBuffer()
 	defer putHashBuffer(b)
@@ -522,6 +523,25 @@ func (n *DedupStage) needsUpdate(entry *nflogpb.Entry, firing, resolved map[uint
 	// unless we only have resolved alerts.
 	if entry == nil {
 		return len(firing) > 0
+	}
+
+	// Check to see if this is a best-effort hash of a large message that
+	// can't be gossiped.
+	if entry.Format == nflogpb.Entry_COMPRESSED {
+		if len(firing) > 0 {
+			hashes := make([]uint64, 0, len(firing))
+			for h := range firing {
+				hashes = append(hashes, h)
+			}
+			firing = map[uint64]struct{}{hash.Uint64(hashes): struct{}{}}
+		}
+		if len(resolved) > 0 {
+			hashes := make([]uint64, 0, len(resolved))
+			for h := range resolved {
+				hashes = append(hashes, h)
+			}
+			resolved = map[uint64]struct{}{hash.Uint64(hashes): struct{}{}}
+		}
 	}
 
 	if !entry.IsFiringSubset(firing) {

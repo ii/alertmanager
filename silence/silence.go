@@ -30,6 +30,7 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 	"github.com/pkg/errors"
+	"github.com/prometheus/alertmanager/cluster"
 	pb "github.com/prometheus/alertmanager/silence/silencepb"
 	"github.com/prometheus/alertmanager/types"
 	"github.com/prometheus/client_golang/prometheus"
@@ -115,6 +116,8 @@ type metrics struct {
 	silencesPending         prometheus.GaugeFunc
 	silencesExpired         prometheus.GaugeFunc
 	propagatedMessagesTotal prometheus.Counter
+	compressedMessagesTotal prometheus.Counter
+	skippedMessagesTotal    prometheus.Counter
 }
 
 func newSilenceMetricByState(s *Silences, st types.SilenceState) prometheus.GaugeFunc {
@@ -165,6 +168,14 @@ func newMetrics(r prometheus.Registerer, s *Silences) *metrics {
 		Name: "alertmanager_silences_gossip_messages_propagated_total",
 		Help: "Number of received gossip messages that have been further gossiped.",
 	})
+	m.compressedMessagesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "alertmanager_silence_gossip_messages_compressed_total",
+		Help: "Number of received gossip messages that have had their comment truncated.",
+	})
+	m.skippedMessagesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "alertmanager_silence_gossip_messages_skipped_total",
+		Help: "Number of received gossip messages that were not gossiped due to size.",
+	})
 	if s != nil {
 		m.silencesActive = newSilenceMetricByState(s, types.SilenceStateActive)
 		m.silencesPending = newSilenceMetricByState(s, types.SilenceStatePending)
@@ -183,6 +194,8 @@ func newMetrics(r prometheus.Registerer, s *Silences) *metrics {
 			m.silencesPending,
 			m.silencesExpired,
 			m.propagatedMessagesTotal,
+			m.compressedMessagesTotal,
+			m.skippedMessagesTotal,
 		)
 	}
 	return m
@@ -400,6 +413,29 @@ func (s *Silences) setSilence(sil *pb.Silence) error {
 	b, err := marshalMeshSilence(msil)
 	if err != nil {
 		return err
+	}
+
+	if len(b) > cluster.MaxClusterMessageSize {
+		// Add metric for oversized message so users can try to shrink them.
+		level.Error(s.logger).Log("msg", "cluster message exceeds max size", "max", cluster.MaxClusterMessageSize, "size", len(b))
+		msil.Silence.Format = pb.Silence_COMPRESSED
+		if n := len(msil.Silence.Comment); n < 200 {
+			s.metrics.skippedMessagesTotal.Inc()
+			level.Error(s.logger).Log("msg", "compressed cluster message exceeds max size", "max", cluster.MaxClusterMessageSize, "size", len(b))
+			return fmt.Errorf("silence too big: %d > %d", len(b), cluster.MaxClusterMessageSize)
+		}
+
+		msil.Silence.Comment = msil.Silence.Comment[:200]
+		b, err = marshalMeshSilence(msil)
+		if err != nil {
+			return err
+		}
+		if len(b) > cluster.MaxClusterMessageSize {
+			s.metrics.skippedMessagesTotal.Inc()
+			level.Error(s.logger).Log("msg", "compressed cluster message exceeds max size", "max", cluster.MaxClusterMessageSize, "size", len(b))
+			return fmt.Errorf("silence too big: %d > %d", len(b), cluster.MaxClusterMessageSize)
+		}
+		s.metrics.compressedMessagesTotal.Inc()
 	}
 
 	s.st.merge(msil)

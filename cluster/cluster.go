@@ -97,6 +97,7 @@ const (
 	DefaultProbeInterval     = 1 * time.Second
 	DefaultReconnectInterval = 10 * time.Second
 	DefaultReconnectTimeout  = 6 * time.Hour
+	MaxClusterMessageSize    = 800
 )
 
 func Join(
