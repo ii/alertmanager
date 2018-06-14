@@ -97,6 +97,7 @@ const (
 	DefaultProbeInterval     = 1 * time.Second
 	DefaultReconnectInterval = 10 * time.Second
 	DefaultReconnectTimeout  = 6 * time.Hour
+	maxGossipPacketSize      = 1400
 )
 
 func Join(
@@ -193,6 +194,7 @@ func Join(
 	cfg.ProbeInterval = probeInterval
 	cfg.LogOutput = &logWriter{l: l}
 	cfg.GossipNodes = retransmit
+	cfg.UDPBufferSize = maxGossipPacketSize
 
 	if advertiseHost != "" {
 		cfg.AdvertiseAddr = advertiseHost
@@ -441,9 +443,25 @@ func (p *Peer) peerUpdate(n *memberlist.Node) {
 
 // AddState adds a new state that will be gossiped. It returns a channel to which
 // broadcast messages for the state can be sent.
-func (p *Peer) AddState(key string, s State) *Channel {
+func (p *Peer) AddState(key string, s State, reg prometheus.Registerer) *Channel {
 	p.states[key] = s
-	return &Channel{key: key, bcast: p.delegate.bcast}
+	send := func(b []byte) {
+		p.delegate.bcast.QueueBroadcast(simpleBroadcast(b))
+	}
+	members := func() []*memberlist.Node {
+		peers := p.Peers()
+		for i, n := range peers {
+			if n.Name == p.Self().Name {
+				peers = append(peers[:i], peers[i+1:]...)
+				break
+			}
+		}
+		return peers
+	}
+	sendOversize := func(n *memberlist.Node, b []byte) error {
+		return p.mlist.SendReliable(n, b)
+	}
+	return NewChannel(key, send, members, sendOversize, p.logger, p.stopc, reg)
 }
 
 // Leave the cluster, waiting up to timeout.
@@ -576,13 +594,6 @@ type State interface {
 	Merge(b []byte) error
 }
 
-// Channel allows clients to send messages for a specific state type that will be
-// broadcasted in a best-effort manner.
-type Channel struct {
-	key   string
-	bcast *memberlist.TransmitLimitedQueue
-}
-
 // We use a simple broadcast implementation in which items are never invalidated by others.
 type simpleBroadcast []byte
 
@@ -590,13 +601,104 @@ func (b simpleBroadcast) Message() []byte                       { return []byte(
 func (b simpleBroadcast) Invalidates(memberlist.Broadcast) bool { return false }
 func (b simpleBroadcast) Finished()                             {}
 
+// Channel allows clients to send messages for a specific state type that will be
+// broadcasted in a best-effort manner.
+type Channel struct {
+	key          string
+	send         func([]byte)
+	members      func() []*memberlist.Node
+	sendOversize func(*memberlist.Node, []byte) error
+
+	msgc   chan []byte
+	logger log.Logger
+
+	oversizeGossipMessageFailureTotal prometheus.Counter
+	oversizeGossipDuration            prometheus.Histogram
+}
+
+func NewChannel(
+	key string,
+	send func([]byte),
+	members func() []*memberlist.Node,
+	sendOversize func(*memberlist.Node, []byte) error,
+	logger log.Logger,
+	stopc chan struct{},
+	reg prometheus.Registerer,
+) *Channel {
+	oversizeGossipMessageFailureTotal := prometheus.NewCounter(prometheus.CounterOpts{
+		Name:        "alertmanager_oversized_gossip_message_failure_total",
+		Help:        "Number notification log received queries that failed.",
+		ConstLabels: prometheus.Labels{"key": key},
+	})
+	oversizeGossipDuration := prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:        "alertmanager_oversize_gossip_duration_seconds",
+		Help:        "Duration of oversized gossip message requests.",
+		ConstLabels: prometheus.Labels{"key": key},
+	})
+
+	reg.MustRegister(oversizeGossipDuration, oversizeGossipMessageFailureTotal)
+
+	c := &Channel{
+		key:                               key,
+		send:                              send,
+		members:                           members,
+		logger:                            logger,
+		msgc:                              make(chan []byte, 200),
+		sendOversize:                      sendOversize,
+		oversizeGossipMessageFailureTotal: oversizeGossipMessageFailureTotal,
+		oversizeGossipDuration:            oversizeGossipDuration,
+	}
+
+	go c.handleOverSizedMessages(stopc)
+
+	return c
+}
+
+// handleOverSizedMessages prevents memberlist from opening too many parallel
+// TCP connections to its peers.
+func (c *Channel) handleOverSizedMessages(stopc chan struct{}) {
+	var wg sync.WaitGroup
+	for {
+		select {
+		case b := <-c.msgc:
+			for _, n := range c.members() {
+				go func(n *memberlist.Node) {
+					wg.Add(1)
+					defer wg.Done()
+
+					start := time.Now()
+					if err := c.sendOversize(n, b); err != nil {
+						level.Debug(c.logger).Log("msg", "failed to send reliable", "key", c.key, "node", n, "err", err)
+						c.oversizeGossipMessageFailureTotal.Inc()
+						return
+					}
+					c.oversizeGossipDuration.Observe(time.Since(start).Seconds())
+				}(n)
+			}
+
+			wg.Wait()
+		case <-stopc:
+			return
+		}
+	}
+}
+
 // Broadcast enqueues a message for broadcasting.
 func (c *Channel) Broadcast(b []byte) {
 	b, err := proto.Marshal(&clusterpb.Part{Key: c.key, Data: b})
 	if err != nil {
 		return
 	}
-	c.bcast.QueueBroadcast(simpleBroadcast(b))
+
+	if OversizedMessage(b) {
+		c.msgc <- b
+	} else {
+		c.send(b)
+	}
+}
+
+func OversizedMessage(b []byte) bool {
+	return len(b) > maxGossipPacketSize/2
 }
 
 func resolvePeers(ctx context.Context, peers []string, myAddress string, res net.Resolver, waitIfEmpty bool) ([]string, error) {
