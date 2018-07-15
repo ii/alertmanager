@@ -37,7 +37,7 @@ type silenceUpdateCmd struct {
 	ids      []string
 }
 
-func configureSilenceUpdateCmd(cc *kingpin.CmdClause) {
+func configureSilenceUpdateCmd(ctx context.Context, cc *kingpin.CmdClause) {
 	var (
 		c         = &silenceUpdateCmd{}
 		updateCmd = cc.Command("update", "Update silences")
@@ -49,10 +49,10 @@ func configureSilenceUpdateCmd(cc *kingpin.CmdClause) {
 	updateCmd.Flag("comment", "A comment to help describe the silence").Short('c').StringVar(&c.comment)
 	updateCmd.Arg("update-ids", "Silence IDs to update").StringsVar(&c.ids)
 
-	updateCmd.Action(c.update)
+	updateCmd.Action(execWithTimeout(c.update))
 }
 
-func (c *silenceUpdateCmd) update(ctx *kingpin.ParseContext) error {
+func (c *silenceUpdateCmd) update(ctx context.Context, _ *kingpin.ParseContext) error {
 	if len(c.ids) < 1 {
 		return fmt.Errorf("no silence IDs specified")
 	}
@@ -65,7 +65,7 @@ func (c *silenceUpdateCmd) update(ctx *kingpin.ParseContext) error {
 
 	var updatedSilences []types.Silence
 	for _, silenceID := range c.ids {
-		silence, err := silenceAPI.Get(context.Background(), silenceID)
+		silence, err := silenceAPI.Get(ctx, silenceID)
 		if err != nil {
 			return err
 		}
@@ -100,7 +100,7 @@ func (c *silenceUpdateCmd) update(ctx *kingpin.ParseContext) error {
 			silence.Comment = c.comment
 		}
 
-		newID, err := silenceAPI.Set(context.Background(), *silence)
+		newID, err := silenceAPI.Set(ctx, *silence)
 		if err != nil {
 			return err
 		}

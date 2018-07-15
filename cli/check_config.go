@@ -14,6 +14,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -34,7 +35,7 @@ and associated templates. Non existing templates will not trigger
 errors.
 `
 
-func configureCheckConfigCmd(app *kingpin.Application) {
+func configureCheckConfigCmd(_ context.Context, app *kingpin.Application) {
 	var (
 		c        = &checkConfigCmd{}
 		checkCmd = app.Command("check-config", checkConfigHelp)

@@ -14,8 +14,10 @@
 package cli
 
 import (
+	"context"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/prometheus/common/version"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -28,6 +30,7 @@ var (
 	verbose         bool
 	alertmanagerURL *url.URL
 	output          string
+	timeout         time.Duration
 
 	configFiles = []string{os.ExpandEnv("$HOME/.config/amtool/config.yml"), "/etc/amtool/config.yml"}
 	legacyFlags = map[string]string{"comment_required": "require-comment"}
@@ -61,6 +64,8 @@ func Execute() {
 	app.Flag("verbose", "Verbose running information").Short('v').BoolVar(&verbose)
 	app.Flag("alertmanager.url", "Alertmanager to talk to").URLVar(&alertmanagerURL)
 	app.Flag("output", "Output formatter (simple, extended, json)").Short('o').Default("simple").EnumVar(&output, "simple", "extended", "json")
+	app.Flag("timeout", "Timeout for the executed command").Default("30s").DurationVar(&timeout)
+
 	app.Version(version.Print("amtool"))
 	app.GetFlag("help").Short('h')
 	app.UsageTemplate(kingpin.CompactUsageTemplate)
@@ -70,10 +75,13 @@ func Execute() {
 		kingpin.Fatalf("could not load config file: %v\n", err)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	configureAlertCmd(app)
-	configureSilenceCmd(app)
-	configureCheckConfigCmd(app)
-	configureConfigCmd(app)
+	configureSilenceCmd(ctx, app)
+	configureCheckConfigCmd(ctx, app)
+	configureConfigCmd(ctx, app)
 
 	err = resolver.Bind(app, os.Args[1:])
 	if err != nil {
