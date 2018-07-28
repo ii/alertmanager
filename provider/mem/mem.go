@@ -14,68 +14,47 @@
 package mem
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/prometheus/alertmanager/provider"
+	"github.com/prometheus/alertmanager/store"
 	"github.com/prometheus/alertmanager/types"
 	"github.com/prometheus/common/model"
 )
 
 // Alerts gives access to a set of alerts. All methods are goroutine-safe.
 type Alerts struct {
-	mtx        sync.RWMutex
-	alerts     map[model.Fingerprint]*types.Alert
-	marker     types.Marker
-	intervalGC time.Duration
-	stopGC     chan struct{}
+	alerts store.Store
+	cancel context.CancelFunc
 
+	mtx       sync.Mutex
 	listeners map[int]chan *types.Alert
 	next      int
 }
 
 // NewAlerts returns a new alert provider.
-func NewAlerts(m types.Marker, intervalGC time.Duration) (*Alerts, error) {
+func NewAlerts(ctx context.Context, m types.Marker, intervalGC time.Duration) (*Alerts, error) {
+	ctx, cancel := context.WithCancel(ctx)
 	a := &Alerts{
-		alerts:     map[model.Fingerprint]*types.Alert{},
-		marker:     m,
-		intervalGC: intervalGC,
-		stopGC:     make(chan struct{}),
-		listeners:  map[int]chan *types.Alert{},
-		next:       0,
+		alerts:    store.NewAlerts(ctx, intervalGC),
+		cancel:    cancel,
+		listeners: map[int]chan *types.Alert{},
+		next:      0,
 	}
-	go a.runGC()
+	a.alerts.SetGCCallback(func(alert *types.Alert) {
+		m.Delete(alert.Fingerprint())
+	})
 
 	return a, nil
 }
 
-func (a *Alerts) runGC() {
-	for {
-		select {
-		case <-a.stopGC:
-			return
-		case <-time.After(a.intervalGC):
-		}
-
-		a.mtx.Lock()
-
-		for fp, alert := range a.alerts {
-			// As we don't persist alerts, we no longer consider them after
-			// they are resolved. Alerts waiting for resolved notifications are
-			// held in memory in aggregation groups redundantly.
-			if alert.EndsAt.Before(time.Now()) {
-				delete(a.alerts, fp)
-				a.marker.Delete(fp)
-			}
-		}
-
-		a.mtx.Unlock()
-	}
-}
-
 // Close the alert provider.
 func (a *Alerts) Close() error {
-	close(a.stopGC)
+	if a.cancel != nil {
+		a.cancel()
+	}
 	return nil
 }
 
@@ -87,8 +66,6 @@ func (a *Alerts) Subscribe() provider.AlertIterator {
 		ch   = make(chan *types.Alert, 200)
 		done = make(chan struct{})
 	)
-	alerts, err := a.getPending()
-
 	a.mtx.Lock()
 	i := a.next
 	a.next++
@@ -103,7 +80,7 @@ func (a *Alerts) Subscribe() provider.AlertIterator {
 			a.mtx.Unlock()
 		}()
 
-		for _, a := range alerts {
+		for a := range a.alerts.List() {
 			select {
 			case ch <- a:
 			case <-done:
@@ -114,7 +91,7 @@ func (a *Alerts) Subscribe() provider.AlertIterator {
 		<-done
 	}()
 
-	return provider.NewAlertIterator(ch, done, err)
+	return provider.NewAlertIterator(ch, done, nil)
 }
 
 // GetPending returns an iterator over all alerts that have
@@ -125,12 +102,10 @@ func (a *Alerts) GetPending() provider.AlertIterator {
 		done = make(chan struct{})
 	)
 
-	alerts, err := a.getPending()
-
 	go func() {
 		defer close(ch)
 
-		for _, a := range alerts {
+		for a := range a.alerts.List() {
 			select {
 			case ch <- a:
 			case <-done:
@@ -139,43 +114,27 @@ func (a *Alerts) GetPending() provider.AlertIterator {
 		}
 	}()
 
-	return provider.NewAlertIterator(ch, done, err)
-}
-
-func (a *Alerts) getPending() ([]*types.Alert, error) {
-	a.mtx.RLock()
-	defer a.mtx.RUnlock()
-
-	res := make([]*types.Alert, 0, len(a.alerts))
-
-	for _, alert := range a.alerts {
-		res = append(res, alert)
-	}
-
-	return res, nil
+	return provider.NewAlertIterator(ch, done, nil)
 }
 
 // Get returns the alert for a given fingerprint.
 func (a *Alerts) Get(fp model.Fingerprint) (*types.Alert, error) {
-	a.mtx.RLock()
-	defer a.mtx.RUnlock()
-
-	alert, ok := a.alerts[fp]
-	if !ok {
-		return nil, provider.ErrNotFound
-	}
-	return alert, nil
+	return a.alerts.Get(fp)
 }
 
 // Put adds the given alert to the set.
 func (a *Alerts) Put(alerts ...*types.Alert) error {
 	a.mtx.Lock()
-	defer a.mtx.Unlock()
+	listeners := make([]chan *types.Alert, 0, len(a.listeners))
+	for _, ch := range a.listeners {
+		listeners = append(listeners, ch)
+	}
+	a.mtx.Unlock()
 
 	for _, alert := range alerts {
 		fp := alert.Fingerprint()
 
-		if old, ok := a.alerts[fp]; ok {
+		if old, err := a.alerts.Get(fp); err == nil {
 			// Merge alerts if there is an overlap in activity range.
 			if (alert.EndsAt.After(old.StartsAt) && alert.EndsAt.Before(old.EndsAt)) ||
 				(alert.StartsAt.After(old.StartsAt) && alert.StartsAt.Before(old.EndsAt)) {
@@ -183,9 +142,11 @@ func (a *Alerts) Put(alerts ...*types.Alert) error {
 			}
 		}
 
-		a.alerts[fp] = alert
+		if err := a.alerts.Set(alert); err != nil {
+			// TODO: Log something??
+		}
 
-		for _, ch := range a.listeners {
+		for _, ch := range listeners {
 			ch <- alert
 		}
 	}
