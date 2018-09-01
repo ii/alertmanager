@@ -3,12 +3,7 @@ module Updates exposing (update)
 import Browser.Navigation as Navigation
 import String exposing (trim)
 import Task
-import Types
-    exposing
-        ( Model
-        , Msg(..)
-        , Route(..)
-        )
+import Types exposing (Model, Msg(..), Route(..))
 import Views.AlertList.Types exposing (AlertListMsg(..))
 import Views.AlertList.Updates
 import Views.SilenceForm.Types exposing (SilenceFormMsg(..))
@@ -62,6 +57,9 @@ update msg ({ basePath, apiUrl } as model) =
 
         NavigateToNotFound ->
             ( { model | route = NotFoundRoute }, Cmd.none )
+
+        NavigateToExternalUrl url ->
+            ( model, Navigation.load url )
 
         RedirectAlerts ->
             ( model, Navigation.pushUrl model.key (basePath ++ "#/alerts") )

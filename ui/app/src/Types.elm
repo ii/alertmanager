@@ -41,6 +41,7 @@ type Msg
     | NavigateToSilenceFormNew (List Matcher)
     | NavigateToSilenceList Filter
     | NavigateToStatus
+    | NavigateToExternalUrl String
     | Noop
     | RedirectAlerts
     | UpdateFilter String
