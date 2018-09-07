@@ -392,9 +392,9 @@ func AssetNames() []string {
 
 // _bindata is a table, holding each asset generator, mapped to its name.
 var _bindata = map[string]func() (*asset, error){
-	"ui/app/script.js":                                                  uiAppScriptJs,
-	"ui/app/index.html":                                                 uiAppIndexHtml,
-	"ui/app/favicon.ico":                                                uiAppFaviconIco,
+	"ui/app/script.js":   uiAppScriptJs,
+	"ui/app/index.html":  uiAppIndexHtml,
+	"ui/app/favicon.ico": uiAppFaviconIco,
 	"ui/app/lib/bootstrap-4.0.0-alpha.6-dist/css/bootstrap.min.css":     uiAppLibBootstrap400Alpha6DistCssBootstrapMinCss,
 	"ui/app/lib/bootstrap-4.0.0-alpha.6-dist/css/bootstrap.min.css.map": uiAppLibBootstrap400Alpha6DistCssBootstrapMinCssMap,
 	"ui/app/lib/font-awesome-4.7.0/css/font-awesome.css":                uiAppLibFontAwesome470CssFontAwesomeCss,
