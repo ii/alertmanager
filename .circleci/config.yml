@@ -4,7 +4,7 @@ version: 2
 jobs:
   test:
     docker:
-    - image: circleci/golang:1.10
+    - image: circleci/golang:1.11
     working_directory: /go/src/github.com/prometheus/alertmanager
 
     steps:
@@ -16,7 +16,6 @@ jobs:
 
   build:
     machine: true
-    working_directory: /home/circleci/.go_workspace/src/github.com/prometheus/alertmanager
 
     steps:
     - checkout
@@ -29,8 +28,7 @@ jobs:
 
   docker_hub_master:
     docker:
-    - image: circleci/golang:1.10
-    working_directory: /go/src/github.com/prometheus/alertmanager
+    - image: circleci/golang:1.11
 
     steps:
     - checkout
@@ -49,8 +47,7 @@ jobs:
 
   docker_hub_release_tags:
     docker:
-    - image: circleci/golang:1.10
-    working_directory: /go/src/github.com/prometheus/alertmanager
+    - image: circleci/golang:1.11
 
     steps:
     - checkout
