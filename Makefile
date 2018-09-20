@@ -39,10 +39,14 @@ ifeq ($(GOHOSTARCH),amd64)
 endif
 
 ifeq ($(OS_detected), Linux)
+    PROMU_CONF  ?= .promu-no-cgo.yml
     test-e2e := test-e2e
 else
+    PROMU_CONF  ?= .promu-cgo.yml
     test-e2e := skip-test-e2e
 endif
+
+PROMU := $(FIRST_GOPATH)/bin/promu --config $(PROMU_CONF)
 
 e2e-out = collector/fixtures/e2e-output.txt
 ifeq ($(MACH), ppc64le)
