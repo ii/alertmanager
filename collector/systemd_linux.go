@@ -228,7 +228,7 @@ func (c *systemdCollector) getAllUnits() ([]unit, error) {
 	defer conn.Close()
 
 	// Filter out any units that are not installed and are pulled in only as dependencies.
-	allUnits, err := conn.ListUnitsFiltered([]string{"loaded"})
+	allUnits, err := conn.ListUnits()
 
 	if err != nil {
 		return nil, err
@@ -321,7 +321,7 @@ func summarizeUnits(units []unit) map[string]float64 {
 func filterUnits(units []unit, whitelistPattern, blacklistPattern *regexp.Regexp) []unit {
 	filtered := make([]unit, 0, len(units))
 	for _, unit := range units {
-		if whitelistPattern.MatchString(unit.Name) && !blacklistPattern.MatchString(unit.Name) {
+		if whitelistPattern.MatchString(unit.Name) && !blacklistPattern.MatchString(unit.Name) && unit.LoadState == "loaded" {
 			filtered = append(filtered, unit)
 		} else {
 			log.Debugf("Ignoring unit: %s", unit.Name)
