@@ -5,7 +5,7 @@
 ### Changes
 
 * [BUGFIX]
-* [CHANGE]
+* [CHANGE] Add TCPSynRetrans to default filter
 * [ENHANCEMENT] Add Infiniband counters #1120
 * [FEATURE]
 
