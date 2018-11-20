@@ -717,7 +717,12 @@ func (s *Silences) Merge(b []byte) error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
+	now := s.now()
+
 	for _, e := range st {
+		if !e.ExpiresAt.After(now) {
+			continue
+		}
 		if merged := s.st.merge(e); merged && !cluster.OversizedMessage(b) {
 			// If this is the first we've seen the message and it's
 			// not oversized, gossip it to other nodes. We don't
