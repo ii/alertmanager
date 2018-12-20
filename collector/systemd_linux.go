@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-systemd/dbus"
 	"github.com/prometheus/client_golang/prometheus"
@@ -119,6 +120,7 @@ func NewSystemdCollector() (Collector, error) {
 }
 
 func (c *systemdCollector) Update(ch chan<- prometheus.Metric) error {
+	begin := time.Now()
 	allUnits, err := c.getAllUnits()
 	if err != nil {
 		return fmt.Errorf("couldn't get units: %s", err)
@@ -128,18 +130,39 @@ func (c *systemdCollector) Update(ch chan<- prometheus.Metric) error {
 	c.collectSummaryMetrics(ch, summary)
 
 	units := filterUnits(allUnits, c.unitWhitelistPattern, c.unitBlacklistPattern)
-	c.collectUnitStatusMetrics(ch, units)
-	c.collectUnitStartTimeMetrics(ch, units)
-	c.collectUnitTasksCurrentMetrics(ch, units)
-	c.collectUnitTasksMaxMetrics(ch, units)
-	c.collectTimers(ch, units)
-	c.collectSockets(ch, units)
+	log.Debugf("systemd gathering units took %f", time.Since(begin).Seconds())
 
+	begin = time.Now()
+	c.collectUnitStatusMetrics(ch, units)
+	log.Debugf("systemd collectUnitStatusMetrics took %f", time.Since(begin).Seconds())
+
+	begin = time.Now()
+	c.collectUnitStartTimeMetrics(ch, units)
+	log.Debugf("systemd collectUnitStartTimeMetrics took %f", time.Since(begin).Seconds())
+
+	begin = time.Now()
+	c.collectUnitTasksCurrentMetrics(ch, units)
+	log.Debugf("systemd collectUnitTasksCurrentMetrics took %f", time.Since(begin).Seconds())
+
+	begin = time.Now()
+	c.collectUnitTasksMaxMetrics(ch, units)
+	log.Debugf("systemd collectUnitTasksMaxMetrics took %f", time.Since(begin).Seconds())
+
+	begin = time.Now()
+	c.collectTimers(ch, units)
+	log.Debugf("systemd collectTimers took %f", time.Since(begin).Seconds())
+
+	begin = time.Now()
+	c.collectSockets(ch, units)
+	log.Debugf("systemd collectSockets took %f", time.Since(begin).Seconds())
+
+	begin = time.Now()
 	systemState, err := c.getSystemState()
 	if err != nil {
 		return fmt.Errorf("couldn't get system state: %s", err)
 	}
 	c.collectSystemState(ch, systemState)
+	log.Debugf("systemd collectSystemState took %f", time.Since(begin).Seconds())
 
 	return nil
 }
