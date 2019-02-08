@@ -6,6 +6,7 @@
   other network metrics #1224
 * The cpufreq metrics now separate the `cpufreq` and `scaling` data based on what the driver provides. #1248
 * The labels for the network_up metric have changed, see issue #1236
+* The systemd collector blacklist now includes automount, device, mount, and slice units by default.
 
 ### Changes
 
@@ -15,6 +16,7 @@
 * [CHANGE] Add TCPSynRetrans to netstat default filter #1143
 * [CHANGE] Add a limit to the number of in-flight requests #1166
 * [CHANGE] Add separate cpufreq and scaling metrics #1248
+* [CHANGE] Update systemd collector blacklist #
 * [ENHANCEMENT] Add Infiniband counters #1120
 * [ENHANCEMENT] Move network_up labels into new metric network_info #1236
 * [FEATURE] Add a flag to disable exporter metrics #1148
