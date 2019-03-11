@@ -23,9 +23,9 @@ import (
 
 	apiv1 "github.com/prometheus/alertmanager/api/v1"
 	apiv2 "github.com/prometheus/alertmanager/api/v2"
-	open_api_models "github.com/prometheus/alertmanager/api/v2/models"
 	"github.com/prometheus/alertmanager/cluster"
 	"github.com/prometheus/alertmanager/config"
+	"github.com/prometheus/alertmanager/dispatch"
 	"github.com/prometheus/alertmanager/provider"
 	"github.com/prometheus/alertmanager/silence"
 	"github.com/prometheus/alertmanager/types"
@@ -75,7 +75,7 @@ type Options struct {
 	// GroupFunc returns a list of alert groups. The alerts are grouped
 	// according to the current active configuration. Alerts returned are
 	// filtered by the arguments provided to the function.
-	GroupFunc func(matchers []*labels.Matcher, receivers *regexp.Regexp, silenced, inhibited, active bool) *open_api_models.AlertGroups
+	GroupFunc func(matchers []*labels.Matcher, receivers *regexp.Regexp, silenced, inhibited, active bool) dispatch.AlertGroups
 }
 
 func (o Options) validate() error {

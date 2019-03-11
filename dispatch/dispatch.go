@@ -16,6 +16,7 @@ package dispatch
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/pkg/labels"
 
 	"github.com/prometheus/alertmanager/notify"
 	"github.com/prometheus/alertmanager/provider"
@@ -37,8 +39,9 @@ type Dispatcher struct {
 	alerts provider.Alerts
 	stage  notify.Stage
 
-	marker  types.Marker
-	timeout func(time.Duration) time.Duration
+	marker         types.Marker
+	timeout        func(time.Duration) time.Duration
+	setAlertStatus func(model.LabelSet)
 
 	aggrGroups map[*Route]map[model.Fingerprint]*aggrGroup
 	mtx        sync.RWMutex
@@ -56,16 +59,18 @@ func NewDispatcher(
 	r *Route,
 	s notify.Stage,
 	mk types.Marker,
+	setAlertStatus func(model.LabelSet),
 	to func(time.Duration) time.Duration,
 	l log.Logger,
 ) *Dispatcher {
 	disp := &Dispatcher{
-		alerts:  ap,
-		stage:   s,
-		route:   r,
-		marker:  mk,
-		timeout: to,
-		logger:  log.With(l, "component", "dispatcher"),
+		alerts:         ap,
+		stage:          s,
+		route:          r,
+		marker:         mk,
+		timeout:        to,
+		setAlertStatus: setAlertStatus,
+		logger:         log.With(l, "component", "dispatcher"),
 	}
 	return disp
 }
@@ -131,6 +136,107 @@ func (d *Dispatcher) run(it provider.AlertIterator) {
 			return
 		}
 	}
+}
+
+// AlertGroup represents how alerts alerts exist within an aggrGroup
+type AlertGroup struct {
+	Alerts   []*EnrichedAlert `json:"alerts"`
+	Labels   model.LabelSet   `json:"labels,omitempty"`
+	Receiver string           `json:"receiver,omitempty"`
+}
+
+// EnrichedAlert is the representation of an alert, with status info and
+// fingerprint.
+type EnrichedAlert struct {
+	*types.Alert
+	Status      types.AlertStatus `json:"status"`
+	Fingerprint string            `json:"fingerprint"`
+}
+
+type AlertGroups []*AlertGroup
+
+func (ag AlertGroups) Swap(i, j int)      { ag[i], ag[j] = ag[j], ag[i] }
+func (ag AlertGroups) Less(i, j int) bool { return ag[i].Labels.Before(ag[j].Labels) }
+func (ag AlertGroups) Len() int           { return len(ag) }
+
+// Groups returns a slice of AlertGroups from the dispatcher's internal state.
+func (d *Dispatcher) Groups(matchers []*labels.Matcher, receivers *regexp.Regexp, silenced, inhibited, active bool) AlertGroups {
+	groups := AlertGroups{}
+
+	d.mtx.RLock()
+	defer d.mtx.RUnlock()
+
+	seen := map[model.Fingerprint]*AlertGroup{}
+
+	for route, ags := range d.aggrGroups {
+		for _, ag := range ags {
+			alertGroup, ok := seen[ag.fingerprint()]
+			if !ok {
+				alertGroup = &AlertGroup{
+					Labels:   ag.labels,
+					Receiver: route.RouteOpts.Receiver,
+				}
+
+				seen[ag.fingerprint()] = alertGroup
+			}
+
+			now := time.Now()
+
+			alerts := ag.alerts.List()
+			enrichedAlerts := make([]*EnrichedAlert, 0, len(alerts))
+			for a := range alerts {
+				if !a.EndsAt.IsZero() && a.EndsAt.Before(now) {
+					continue
+				}
+				d.setAlertStatus(a.Labels)
+				status := d.marker.Status(a.Fingerprint())
+
+				if !active && status.State == types.AlertStateActive {
+					continue
+				}
+
+				if !silenced && len(status.SilencedBy) != 0 {
+					continue
+				}
+
+				if !inhibited && len(status.InhibitedBy) != 0 {
+					continue
+				}
+
+				ea := &EnrichedAlert{
+					Alert:       a,
+					Status:      status,
+					Fingerprint: a.Fingerprint().String(),
+				}
+
+				if !matchesFilterLabels(ea, matchers) {
+					continue
+				}
+
+				enrichedAlerts = append(enrichedAlerts, ea)
+			}
+			if len(enrichedAlerts) == 0 {
+				continue
+			}
+			alertGroup.Alerts = enrichedAlerts
+
+			groups = append(groups, alertGroup)
+		}
+	}
+
+	sort.Sort(groups)
+
+	return groups
+}
+
+func matchesFilterLabels(a *EnrichedAlert, matchers []*labels.Matcher) bool {
+	for _, m := range matchers {
+		if v, prs := a.Labels[model.LabelName(m.Name)]; !prs || !m.Matches(string(v)) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // Stop the dispatcher.

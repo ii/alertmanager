@@ -462,10 +462,6 @@ definitions:
     properties:
       labels:
         $ref: '#/definitions/labelSet'
-      groupBy:
-        type: array
-        items:
-          type: 'string'
       receiver:
         type: string
       alerts:

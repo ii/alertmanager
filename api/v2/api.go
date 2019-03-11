@@ -71,7 +71,7 @@ type API struct {
 	Handler http.Handler
 }
 
-type groupsFn func(matchers []*labels.Matcher, receivers *regexp.Regexp, silenced, inhibited, active bool) *open_api_models.AlertGroups
+type groupsFn func(matchers []*labels.Matcher, receivers *regexp.Regexp, silenced, inhibited, active bool) dispatch.AlertGroups
 type getAlertStatusFn func(prometheus_model.Fingerprint) types.AlertStatus
 type setAlertStatusFn func(prometheus_model.LabelSet)
 
@@ -428,25 +428,11 @@ func (api *API) getAlertGroupsHandler(params alertgroup_ops.GetAlertGroupsParams
 		}
 	}
 
-	// Set alert's current status based on its label set.
-	// api.setAlertStatus(a.Labels)
+	alertGroups := api.groups(matchers, receiverFilter, *params.Silenced, *params.Inhibited, *params.Active)
 
-	// Get alert's current status after seeing if it is suppressed.
-	// status := api.getAlertStatus(a.Fingerprint())
+	level.Debug(api.logger).Log("msg", "alertgroups", "groups", alertGroups)
 
-	// if !*params.Active && status.State == types.AlertStateActive {
-	// 	continue
-	// }
-
-	// if !*params.Silenced && len(status.SilencedBy) != 0 {
-	// 	continue
-	// }
-
-	// if !*params.Inhibited && len(status.InhibitedBy) != 0 {
-	// 	continue
-	// }
-
-	res = *api.groups(matchers, receiverFilter, *params.Silenced, *params.Inhibited, *params.Active)
+	// TODO: Convert alertGroups into open_api_models.AlertGroups{}
 
 	return alertgroup_ops.NewGetAlertGroupsOK().WithPayload(res)
 }

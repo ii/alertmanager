@@ -42,7 +42,6 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/prometheus/alertmanager/api"
-	open_api_models "github.com/prometheus/alertmanager/api/v2/models"
 	"github.com/prometheus/alertmanager/cluster"
 	"github.com/prometheus/alertmanager/config"
 	"github.com/prometheus/alertmanager/dispatch"
@@ -249,9 +248,16 @@ func run() int {
 	}
 	defer alerts.Close()
 
+	var disp *dispatch.Dispatcher
+	defer disp.Stop()
+
 	// TODO: Finish me!
-	groupFn := func(matchers []*labels.Matcher, receivers *regexp.Regexp, silenced, inhibited, active bool) *open_api_models.AlertGroups {
-		return &open_api_models.AlertGroups{}
+	// TODO: Do we want to expose open_api_models into dispatcher or main?
+	// Or keep it as a presenter within the API code?
+	groupFn := func(matchers []*labels.Matcher, receivers *regexp.Regexp, silenced, inhibited, active bool) dispatch.AlertGroups {
+		// marker.Status()
+		return disp.Groups(matchers, receivers, silenced, inhibited, active)
+		// return &open_api_models.AlertGroups{}
 	}
 
 	api, err := api.New(api.Options{
@@ -293,10 +299,7 @@ func run() int {
 		silencer  *silence.Silencer
 		tmpl      *template.Template
 		pipeline  notify.Stage
-		disp      *dispatch.Dispatcher
 	)
-
-	defer disp.Stop()
 
 	configCoordinator := config.NewCoordinator(
 		*configFile,
@@ -326,12 +329,14 @@ func run() int {
 			logger,
 		)
 
-		api.Update(conf, func(labels model.LabelSet) {
+		setAlertStatus := func(labels model.LabelSet) {
 			inhibitor.Mutes(labels)
 			silencer.Mutes(labels)
-		})
+		}
 
-		disp = dispatch.NewDispatcher(alerts, dispatch.NewRoute(conf.Route, nil), pipeline, marker, timeoutFunc, logger)
+		api.Update(conf, setAlertStatus)
+
+		disp = dispatch.NewDispatcher(alerts, dispatch.NewRoute(conf.Route, nil), pipeline, marker, setAlertStatus, timeoutFunc, logger)
 
 		go disp.Run()
 		go inhibitor.Run()
