@@ -50,7 +50,7 @@ func getNetDevStats(ignore *regexp.Regexp) (map[string]map[string]string, error)
 			}
 
 			devStats := map[string]string{}
-			data := (*C.struct_if_data)(ifa.ifa_data)
+			data := (*C.struct_if_data64)(ifa.ifa_data)
 			devStats["receive_packets"] = strconv.FormatUint(uint64(data.ifi_ipackets), 10)
 			devStats["transmit_packets"] = strconv.FormatUint(uint64(data.ifi_opackets), 10)
 			devStats["receive_errs"] = strconv.FormatUint(uint64(data.ifi_ierrors), 10)
