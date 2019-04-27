@@ -73,7 +73,7 @@ init flags url key =
                 Api.makeApiUrl url.path
 
             else
-                Api.makeApiUrl "http://localhost:9093/"
+                Api.makeApiUrl "http://http.alertmanager.staging.prometheus.srv.dt.s-cloud.net:9093"
 
         libUrl =
             if prod then
