@@ -1,11 +1,38 @@
-## Next release
+## 0.17.0 / 2019-05-02
 
-This release includes changes to amtool which are not fully backwards compatible with the previous
-amtool version (#1798) related to backup and import of silences.  If a backup of silences is created using 
-a previous version of amtool (v0.16.1 or earlier), it is possible that not all silences can be correctly imported using a later version of amtool.
+This release includes changes to amtool which are not fully backwards
+compatible with the previous amtool version (#1798) related to backup and
+import of silences. If a backup of silences is created using a previous
+version of amtool (v0.16.1 or earlier), it is possible that not all silences
+can be correctly imported using a later version of amtool.
 
 * [CHANGE] Make api/v2/status.cluster.{name,peers} properties optional for Alertmanager with disabled clustering (#1728)
+* [CHANGE] Trim PagerDuty message summary to 1024 chars, add PagerDuty debug log (#1701)
+* [CHANGE] Set HTTP headers to prevent asset caching (#1817)
+* [CHANGE][ui] Remove superfluous inhibited/silenced text (#1698)
+* [CHANGE][ui] Default alert list view grouped by configured alert groups (#1864)
+* [ENHANCEMENT] Add groups endpoint to v2 api (#1791)
+* [ENHANCEMENT] API returns current state of alerts (#1733)
+* [ENHANCEMENT] Introduce concurrency limit for GET requests and a general timeout for HTTP (#1743)
+* [ENHANCEMENT] Pushover notifier: support HTML, URL title and custom sounds (#1634)
+* [ENHANCEMENT] Support adding custom fields to VictorOps notifications (#1420)
 * [ENHANCEMENT] Migrate amtool CLI to API v2 (#1798)
+* [ENHANCEMENT][ui] Silence preview now shows already-muted alerts (#1776)
+* [ENHANCEMENT][ui] Sort silences from api/v2 similarly to api/v1 (#1786)
+* [ENHANCEMENT][ui] Show inhibited status (#1862)
+* [BUGFIX] Add fix for race causing alerts to be dropped (#1843)
+* [BUGFIX][ui] Correctly construct filter query string for api (#1869)
+* [BUGFIX][ui] Do not display GroupByAll and GroupBy in marshaled config (#1665)
+* [BUGFIX][ui] Respect regex setting when creating silences (#1697)
+
+## 0.16.2 / 2019-04-03
+
+Updating to v0.16.2 is recommended for all users using the Slack, Pagerduty,
+Hipchat, Wechat, VictorOps and Pushover notifier, as connection errors could
+leak secrets embedded in the notifier's URL to stdout.
+
+* [BUGFIX] Redact notifier URL from logs to not leak secrets embedded in the URL (#1822, #1825)
+* [BUGFIX] Allow sending of unauthenticated SMTP requests when `smtp_auth_username` is not supplied (#1739)
 
 ## 0.16.1 / 2019-01-31
 
