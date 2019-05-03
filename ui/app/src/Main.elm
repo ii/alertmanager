@@ -73,7 +73,7 @@ init flags url key =
                 Api.makeApiUrl url.path
 
             else
-                Api.makeApiUrl "http://localhost:9093/"
+                Api.makeApiUrl "http://alertmanager.int.s-cloud.net/"
 
         libUrl =
             if prod then
