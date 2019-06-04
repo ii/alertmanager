@@ -7,6 +7,10 @@
 * [CHANGE]
 * [FEATURE]
 * [ENHANCEMENT]
+
+## 0.18.1 / 2019-06-04
+
+### Changes
 * [BUGFIX] Fix incorrect sysctl call in BSD meminfo collector, resulting in broken swap metrics on FreeBSD #1345
 
 ## 0.18.0 / 2019-05-09
